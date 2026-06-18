@@ -127,7 +127,7 @@ export const responsesRequestSchema = z.object({
   top_p: z.number().optional(),
   stop: stopSchema.optional(),
   stream: z.boolean().optional(),
-  reasoning: reasoningConfigSchema.optional(),
+  reasoning: reasoningConfigSchema.nullable().optional(),
   store: z.boolean().optional(),
   previous_response_id: z.string().optional(),
   parallel_tool_calls: z.boolean().optional(),

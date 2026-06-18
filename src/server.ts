@@ -261,6 +261,11 @@ export function startServer(port?: number) {
 
       if (url.pathname === "/v1/models" && req.method === "GET") {
         const models = await fetchAllModels(config);
+        const accept = req.headers.get("accept") ?? "";
+        const isCodexClient = url.searchParams.has("client_version");
+        if (isCodexClient) {
+          return jsonResponse({ models: [] });
+        }
         return jsonResponse({
           object: "list",
           data: models.map(m => ({
