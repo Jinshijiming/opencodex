@@ -75,6 +75,16 @@ export const KEY_LOGIN_PROVIDERS: Record<string, KeyLoginProvider> = {
   "vercel-ai-gateway": { label: "Vercel AI Gateway", baseUrl: "https://ai-gateway.vercel.sh/v1", adapter: "openai-chat", dashboardUrl: "https://vercel.com/dashboard" },
   // Xiaomi MiMo exposes an Anthropic-compatible endpoint → anthropic adapter (x-api-key).
   xiaomi: { label: "Xiaomi MiMo", baseUrl: "https://api.xiaomimimo.com/anthropic", adapter: "anthropic", dashboardUrl: "https://xiaomimimo.com", defaultModel: "mimo-v2.5-pro" },
+  // ── Gateways / multi-model proxies (standard wire; subscription-token auth) ──────────────
+  // kilo: single-protocol OpenAI-compatible gateway (443 models). Cloudflare AI Gateway: anthropic
+  // wire, URL is a template (fill in your account + gateway). github-copilot & gitlab-duo are
+  // multi-model gateways whose models span 3 protocols on ONE host — mapped to their universal
+  // OpenAI-compatible endpoint (one wire serves the whole lineup). Both need a Bearer subscription
+  // token (not a plain API key), and copilot may need a `User-Agent` header via custom provider config.
+  kilo: { label: "Kilo", baseUrl: "https://api.kilo.ai/api/gateway", adapter: "openai-chat", dashboardUrl: "https://kilo.ai" },
+  "cloudflare-ai-gateway": { label: "Cloudflare AI Gateway", baseUrl: "https://gateway.ai.cloudflare.com/v1/{account-id}/{gateway}/anthropic", adapter: "anthropic", dashboardUrl: "https://dash.cloudflare.com/?to=/:account/ai/ai-gateway" },
+  "github-copilot": { label: "GitHub Copilot", baseUrl: "https://api.githubcopilot.com", adapter: "openai-chat", dashboardUrl: "https://github.com/settings/copilot" },
+  "gitlab-duo": { label: "GitLab Duo", baseUrl: "https://cloud.gitlab.com/ai/v1/proxy/openai/v1", adapter: "openai-chat", dashboardUrl: "https://gitlab.com/-/user_settings/personal_access_tokens" },
 };
 
 /**

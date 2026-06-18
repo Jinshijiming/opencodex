@@ -76,10 +76,24 @@ validates the key, and stores it. Notable entries:
 | Z.AI (GLM Coding) | `https://api.z.ai/api/coding/paas/v4` |
 | Qwen Portal | `https://portal.qwen.ai/v1` |
 | Xiaomi MiMo | `https://api.xiaomimimo.com/anthropic` |
+| Kilo | `https://api.kilo.ai/api/gateway` |
+| GitHub Copilot · GitLab Duo | `https://api.githubcopilot.com` · `https://cloud.gitlab.com/ai/v1/proxy/openai/v1` |
+| Cloudflare AI Gateway | `https://gateway.ai.cloudflare.com/v1/{account}/{gateway}/anthropic` |
 | …and more | opencode zen, Vercel AI Gateway, Venice, NanoGPT, Synthetic, Qianfan, Alibaba, Parallel, ZenMux, LiteLLM |
 
 Most use the `openai-chat` adapter with a bearer key; a few that expose only an Anthropic-compatible
 endpoint (e.g. **Xiaomi MiMo**) use the `anthropic` adapter (`x-api-key`).
+
+:::note[Gateways & subscription proxies]
+A provider is included whenever it speaks a standard streaming API opencodex can proxy
+(`openai-completions`, `anthropic-messages`, `openai-responses`, Azure, or Gemini) — **not** based on
+whether it's an "agent" product. Providers on a proprietary protocol with no opencodex adapter are
+excluded: Cursor, Gemini CLI / Antigravity, Vertex AI, Amazon Bedrock, and the Codex backend itself.
+**GitHub Copilot** and **GitLab Duo** are multi-model gateways mapped to their universal
+OpenAI-compatible endpoint; they authenticate with a Bearer **subscription token** (not a plain API
+key), and Copilot may need a `User-Agent` header set via the provider's `headers`. **Cloudflare AI
+Gateway** needs your account + gateway ids filled into the URL.
+:::
 
 ### Ollama Cloud
 
