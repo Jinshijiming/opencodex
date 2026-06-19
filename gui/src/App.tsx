@@ -4,44 +4,55 @@ import Providers from "./pages/Providers";
 import Models from "./pages/Models";
 import Subagents from "./pages/Subagents";
 import Logs from "./pages/Logs";
+import { IconGrid, IconServer, IconBoxes, IconBot, IconList, IconGithub } from "./icons";
 
 type Page = "dashboard" | "providers" | "models" | "subagents" | "logs";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
+const NAV: { id: Page; label: string; Icon: typeof IconGrid }[] = [
+  { id: "dashboard", label: "Dashboard", Icon: IconGrid },
+  { id: "providers", label: "Providers", Icon: IconServer },
+  { id: "models", label: "Models", Icon: IconBoxes },
+  { id: "subagents", label: "Subagents", Icon: IconBot },
+  { id: "logs", label: "Logs", Icon: IconList },
+];
+
 export default function App() {
   const [page, setPage] = useState<Page>("dashboard");
 
-  const navBtn = (target: Page, label: string) => (
-    <button
-      onClick={() => setPage(target)}
-      style={{
-        padding: "8px 16px", cursor: "pointer", background: "none", border: "none", fontSize: 14,
-        borderBottom: page === target ? "2px solid #3b82f6" : "2px solid transparent",
-        color: page === target ? "#3b82f6" : "#666",
-        fontWeight: page === target ? 600 : 400,
-      }}
-    >{label}</button>
-  );
-
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: 960, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, margin: 0 }}>opencodex</h1>
-        <span style={{ fontSize: 12, color: "#999", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>v0.0.1</span>
-      </div>
-      <nav style={{ display: "flex", gap: 4, borderBottom: "1px solid #e5e7eb", marginBottom: 24 }}>
-        {navBtn("dashboard", "Dashboard")}
-        {navBtn("providers", "Providers")}
-        {navBtn("models", "Models")}
-        {navBtn("subagents", "Subagents")}
-        {navBtn("logs", "Logs")}
-      </nav>
-      {page === "dashboard" && <Dashboard apiBase={API_BASE} />}
-      {page === "providers" && <Providers apiBase={API_BASE} />}
-      {page === "models" && <Models apiBase={API_BASE} />}
-      {page === "subagents" && <Subagents apiBase={API_BASE} />}
-      {page === "logs" && <Logs apiBase={API_BASE} />}
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">
+          <img src="/logo.png" alt="" />
+          <span className="name">opencodex</span>
+          <span className="ver">v0.0.1</span>
+        </div>
+        <nav>
+          {NAV.map(({ id, label, Icon }) => (
+            <button key={id} className={`nav-item${page === id ? " active" : ""}`} onClick={() => setPage(id)}
+              aria-current={page === id ? "page" : undefined}>
+              <Icon /> {label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <a className="sidebar-link" href="https://github.com/lidge-jun/opencodex" target="_blank" rel="noreferrer">
+            <IconGithub /> GitHub
+          </a>
+        </div>
+      </aside>
+
+      <main className="main">
+        <div className="main-inner">
+          {page === "dashboard" && <Dashboard apiBase={API_BASE} />}
+          {page === "providers" && <Providers apiBase={API_BASE} />}
+          {page === "models" && <Models apiBase={API_BASE} />}
+          {page === "subagents" && <Subagents apiBase={API_BASE} />}
+          {page === "logs" && <Logs apiBase={API_BASE} />}
+        </div>
+      </main>
     </div>
   );
 }

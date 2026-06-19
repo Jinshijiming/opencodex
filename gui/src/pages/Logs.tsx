@@ -25,45 +25,49 @@ export default function Logs({ apiBase }: { apiBase: string }) {
     return () => clearInterval(interval);
   }, [apiBase, autoRefresh]);
 
-  const statusColor = (s: number) => s >= 200 && s < 300 ? "#22c55e" : s >= 400 ? "#ef4444" : "#f59e0b";
+  const statusColor = (s: number) => s >= 200 && s < 300 ? "var(--green)" : s >= 400 ? "var(--red)" : "var(--amber)";
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h3 style={{ fontSize: 16, margin: 0 }}>Request Logs</h3>
-        <label style={{ fontSize: 13, color: "#666", cursor: "pointer" }}>
-          <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} style={{ marginRight: 4 }} />
+    <>
+      <div className="page-head">
+        <h2>Request Logs</h2>
+        <label className="muted" style={{ fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
           Auto-refresh
         </label>
       </div>
+      <p className="page-sub">Recent requests routed through the local opencodex proxy, newest first.</p>
+
       {logs.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#888" }}>No requests yet</div>
+        <div className="empty">No requests yet.</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-              <th style={{ textAlign: "left", padding: 8 }}>Time</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Model</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Provider</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Status</th>
-              <th style={{ textAlign: "right", padding: 8 }}>Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...logs].reverse().map((log, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                <td style={{ padding: 8 }}>{new Date(log.timestamp).toLocaleTimeString()}</td>
-                <td style={{ padding: 8 }}>{log.model}</td>
-                <td style={{ padding: 8 }}>{log.provider}</td>
-                <td style={{ padding: 8 }}>
-                  <span style={{ color: statusColor(log.status), fontWeight: 600 }}>{log.status}</span>
-                </td>
-                <td style={{ padding: 8, textAlign: "right" }}>{log.durationMs}ms</td>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Model</th>
+                <th>Provider</th>
+                <th>Status</th>
+                <th className="num">Duration</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {[...logs].reverse().map((log, i) => (
+                <tr key={i}>
+                  <td className="muted mono">{new Date(log.timestamp).toLocaleTimeString()}</td>
+                  <td className="mono">{log.model}</td>
+                  <td className="muted">{log.provider}</td>
+                  <td>
+                    <span className="mono" style={{ color: statusColor(log.status), fontWeight: 600 }}>{log.status}</span>
+                  </td>
+                  <td className="num">{log.durationMs}ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-    </div>
+    </>
   );
 }

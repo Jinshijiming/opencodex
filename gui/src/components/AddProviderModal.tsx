@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { IconX, IconLock, IconKey, IconExternal } from "../icons";
 
 export interface ProviderConfig {
   adapter: string;
@@ -163,14 +164,17 @@ export default function AddProviderModal({
       });
       const data = await res.json();
       if (!aliveRef.current) return;
-      if (!res.ok || !data.url) {
+      if (!res.ok) {
         setOauthMsg(data.error === "unknown oauth provider"
           ? "OAuth login for this provider arrives in the next update — use an API key for now."
           : (data.error || "Login failed to start"));
         return;
       }
-      window.open(data.url, "_blank");
-      setOauthMsg("Waiting for browser login…");
+      // A non-empty url = browser/device flow (the server also opens it). An EMPTY url with a 200 =
+      // a local-token import (e.g. Anthropic's Claude Code keychain, Grok CLI) that needs no browser
+      // — just poll status until the credential lands. Don't treat empty url as a failure.
+      if (data.url) { window.open(data.url, "_blank"); setOauthMsg("Waiting for browser login…"); }
+      else { setOauthMsg(data.instructions || "Logging in…"); }
       for (let i = 0; i < 100; i++) {
         await new Promise(r => setTimeout(r, 2000));
         if (!aliveRef.current) return; // modal closed → stop polling, don't fire onAdded
@@ -190,103 +194,101 @@ export default function AddProviderModal({
   const dup = form ? existingNames.includes(form.name.trim()) && form.name.trim() !== "" : false;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Add provider" onClick={onClose} style={overlay}>
-      <div onClick={e => e.stopPropagation()} style={card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h3 style={{ fontSize: 16, margin: 0 }}>{preset ? `Add: ${preset.label}` : "Add provider"}</h3>
-          <button onClick={onClose} aria-label="Close" style={iconBtn}>×</button>
+    <div role="dialog" aria-modal="true" aria-label="Add provider" className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>{preset ? `Add: ${preset.label}` : "Add provider"}</h3>
+          <button className="btn btn-ghost btn-icon" aria-label="Close" onClick={onClose}><IconX /></button>
         </div>
 
         {!preset ? (
           <>
             <input
               ref={searchRef}
+              className="input"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search providers…"
-              style={input}
             />
             <div style={{ marginTop: 12, maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
               {filtered.map(p => (
-                <button key={p.id} onClick={() => choosePreset(p)} style={presetRow}>
+                <button key={p.id} className="list-row" onClick={() => choosePreset(p)}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.label}</div>
-                    <div style={{ fontSize: 12, color: "#888" }}>
-                      <code>{p.adapter}</code>{p.note ? ` · ${p.note}` : ""}
-                    </div>
+                    <div className="title">{p.label}</div>
+                    <div className="sub"><code className="chip">{p.adapter}</code>{p.note ? ` · ${p.note}` : ""}</div>
                   </div>
                   {p.auth === "oauth"
-                    ? <span style={badge("#2563eb", "#dbeafe")}>OAuth login</span>
+                    ? <span className="badge badge-accent">OAuth</span>
                     : p.auth === "forward"
-                      ? <span style={badge("#16a34a", "#dcfce7")}>Codex login</span>
-                      : <span style={badge("#6b7280", "#f3f4f6")}>API key</span>}
+                      ? <span className="badge badge-green">Codex login</span>
+                      : <span className="badge badge-muted">API key</span>}
                 </button>
               ))}
-              {filtered.length === 0 && <div style={{ fontSize: 13, color: "#888", padding: 8 }}>No match.</div>}
+              {filtered.length === 0 && <div className="muted" style={{ fontSize: 13, padding: 8 }}>No match.</div>}
             </div>
           </>
         ) : form && (
           preset.auth === "oauth" && form.authMode === "oauth" ? (
             // ── Real OAuth login pane ──
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 13, color: "#555" }}>{preset.note ?? "Log in with your account — no API key needed."}</div>
+              <div className="muted" style={{ fontSize: 13 }}>{preset.note ?? "Log in with your account — no API key needed."}</div>
               {oauthSupported.includes(preset.oauthProvider ?? "") ? (
-                <button onClick={() => loginOAuth(preset.oauthProvider!)} disabled={oauthBusy}
-                  style={{ ...btn("#2563eb"), opacity: oauthBusy ? 0.6 : 1, fontSize: 14, padding: "12px 16px" }}>
-                  {oauthBusy ? "Waiting for browser…" : `🔐 Log in with ${preset.label}`}
+                <button className="btn btn-primary" onClick={() => loginOAuth(preset.oauthProvider!)} disabled={oauthBusy}
+                  style={{ width: "100%", padding: "12px 16px", fontSize: 14 }}>
+                  <IconLock />{oauthBusy ? "Waiting for browser…" : `Log in with ${preset.label}`}
                 </button>
               ) : (
-                <div style={{ fontSize: 13, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "10px 12px" }}>
+                <div style={{ fontSize: 13, color: "var(--amber)", background: "var(--amber-soft)", border: "1px solid var(--amber)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
                   OAuth login for {preset.label} arrives in the next update. Use an API key for now.
                 </div>
               )}
-              {oauthMsg && <div style={{ fontSize: 12, color: /error|update|timed/.test(oauthMsg) ? "#b45309" : "#2563eb" }}>{oauthMsg}</div>}
+              {oauthMsg && <div style={{ fontSize: 12, color: /error|update|timed/.test(oauthMsg) ? "var(--amber)" : "var(--accent-hover)" }}>{oauthMsg}</div>}
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 2 }}>
-                <button onClick={() => { setForm({ ...form, authMode: "key" }); setOauthMsg(""); }} style={linkBtn}>Use an API key instead</button>
+                <button className="link-btn" onClick={() => { setForm({ ...form, authMode: "key" }); setOauthMsg(""); }}>Use an API key instead</button>
                 <div style={{ flex: 1 }} />
-                <button onClick={back} style={btn("#9ca3af")}>Back</button>
+                <button className="btn btn-ghost" onClick={back}>Back</button>
               </div>
             </div>
           ) : (
             // ── API key / Codex-forward form ──
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Field label="Provider name">
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. openrouter" style={input} />
+                <input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. openrouter" />
               </Field>
-              {dup && <div style={{ fontSize: 12, color: "#d97706" }}>A provider named “{form.name.trim()}” exists — it will be overwritten.</div>}
+              {dup && <div style={{ fontSize: 12, color: "var(--amber)" }}>A provider named “{form.name.trim()}” exists — it will be overwritten.</div>}
               <Field label="Adapter">
-                <select value={form.adapter} onChange={e => setForm({ ...form, adapter: e.target.value })} style={input}>
+                <select className="input" value={form.adapter} onChange={e => setForm({ ...form, adapter: e.target.value })}>
                   {["openai-responses", "openai-chat", "anthropic", "google", "azure-openai"].map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </Field>
               <Field label="Base URL">
-                <input value={form.baseUrl} onChange={e => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://…" style={input} />
+                <input className="input" value={form.baseUrl} onChange={e => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://…" />
               </Field>
               {form.authMode === "forward" ? (
-                <div style={{ fontSize: 12, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px" }}>
-                  No key needed — the proxy forwards your <code>codex login</code> credentials to this provider.
+                <div style={{ fontSize: 12, color: "var(--green)", background: "var(--green-soft)", border: "1px solid var(--green)", borderRadius: "var(--radius-sm)", padding: "8px 10px" }}>
+                  No key needed — the proxy forwards your <code className="chip">codex login</code> credentials to this provider.
                 </div>
               ) : (
                 <>
                   {preset.dashboardUrl && (
-                    <a href={preset.dashboardUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#2563eb" }}>
-                      🔑 Get your {preset.label} API key ↗
+                    <a href={preset.dashboardUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <IconKey style={{ width: 14, height: 14 }} />Get your {preset.label} API key<IconExternal style={{ width: 13, height: 13 }} />
                     </a>
                   )}
                   <Field label="API key">
-                    <input type="password" value={form.apiKey} onChange={e => setForm({ ...form, apiKey: e.target.value })} placeholder="sk-… (or $ENV_VAR)" style={input} />
+                    <input className="input" type="password" value={form.apiKey} onChange={e => setForm({ ...form, apiKey: e.target.value })} placeholder="sk-… (or $ENV_VAR)" />
                   </Field>
                 </>
               )}
               <Field label="Default model (optional)">
-                <input value={form.defaultModel} onChange={e => setForm({ ...form, defaultModel: e.target.value })} placeholder="e.g. gpt-5.5" style={input} />
+                <input className="input" value={form.defaultModel} onChange={e => setForm({ ...form, defaultModel: e.target.value })} placeholder="e.g. gpt-5.5" />
               </Field>
-              {error && <div role="alert" style={{ fontSize: 13, color: "#ef4444" }}>{error}</div>}
+              {error && <div role="alert" style={{ fontSize: 13, color: "var(--red)" }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center" }}>
-                <button onClick={submit} disabled={saving} style={{ ...btn("#3b82f6"), opacity: saving ? 0.6 : 1 }}>{saving ? "Adding…" : "Add provider"}</button>
-                {preset.auth === "oauth" && <button onClick={() => { setForm({ ...form, authMode: "oauth" }); setError(""); }} style={linkBtn}>← Use OAuth login</button>}
+                <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? "Adding…" : "Add provider"}</button>
+                {preset.auth === "oauth" && <button className="link-btn" onClick={() => { setForm({ ...form, authMode: "oauth" }); setError(""); }}>← Use OAuth login</button>}
                 <div style={{ flex: 1 }} />
-                <button onClick={back} style={btn("#9ca3af")}>Back</button>
+                <button className="btn btn-ghost" onClick={back}>Back</button>
               </div>
             </div>
           )
@@ -298,39 +300,9 @@ export default function AddProviderModal({
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 12, color: "#555", fontWeight: 500 }}>{label}</span>
+    <label style={{ display: "block" }}>
+      <span className="field-label">{label}</span>
       {children}
     </label>
   );
 }
-
-const overlay: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-  display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "8vh 16px", zIndex: 50,
-};
-const card: React.CSSProperties = {
-  background: "#fff", borderRadius: 12, padding: 20, width: "100%", maxWidth: 520,
-  boxShadow: "0 12px 40px rgba(0,0,0,0.18)", maxHeight: "84vh", overflowY: "auto",
-};
-const input: React.CSSProperties = {
-  width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #e5e7eb",
-  fontSize: 13, fontFamily: "inherit", boxSizing: "border-box",
-};
-const presetRow: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-  padding: "10px 12px", borderRadius: 8, border: "1px solid #eee", background: "#fafafa",
-  cursor: "pointer", textAlign: "left", width: "100%",
-};
-const iconBtn: React.CSSProperties = {
-  border: "none", background: "none", fontSize: 22, lineHeight: 1, cursor: "pointer", color: "#888", padding: 0,
-};
-const btn = (bg: string): React.CSSProperties => ({
-  padding: "8px 16px", borderRadius: 6, border: "none", background: bg, color: "#fff", fontSize: 13, cursor: "pointer",
-});
-const linkBtn: React.CSSProperties = {
-  border: "none", background: "none", color: "#2563eb", fontSize: 13, cursor: "pointer", padding: "8px 2px", textDecoration: "underline",
-};
-const badge = (color: string, bg: string): React.CSSProperties => ({
-  fontSize: 11, fontWeight: 600, color, background: bg, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
-});

@@ -1,24 +1,9 @@
 import { useEffect, useState } from "react";
+import { IconAlert, IconCheck, IconX } from "../icons";
 
-interface HealthData {
-  status: string;
-  version: string;
-  uptime: number;
-}
-
-interface ProviderInfo {
-  name: string;
-  adapter: string;
-  baseUrl: string;
-  defaultModel?: string;
-  hasApiKey: boolean;
-}
-
-interface ModelInfo {
-  id: string;
-  provider: string;
-  owned_by?: string;
-}
+interface HealthData { status: string; version: string; uptime: number }
+interface ProviderInfo { name: string; adapter: string; baseUrl: string; defaultModel?: string; hasApiKey: boolean }
+interface ModelInfo { id: string; provider: string; owned_by?: string }
 
 export default function Dashboard({ apiBase }: { apiBase: string }) {
   const [health, setHealth] = useState<HealthData | null>(null);
@@ -55,76 +40,75 @@ export default function Dashboard({ apiBase }: { apiBase: string }) {
       .catch(() => setModelsLoading(false));
   }, [apiBase, error]);
 
-  const card = (title: string, value: string, color = "#111") => (
-    <div style={{ background: "#f9fafb", borderRadius: 8, padding: 16, flex: 1 }}>
-      <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
-    </div>
-  );
-
   if (error) {
     return (
-      <div style={{ textAlign: "center", padding: 40 }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-        <div style={{ color: "#ef4444", fontWeight: 600 }}>{error}</div>
-        <div style={{ color: "#888", fontSize: 13, marginTop: 8 }}>Run <code>ocx start</code> to start the proxy</div>
+      <div className="empty" style={{ marginTop: 40 }}>
+        <IconAlert />
+        <div className="title" style={{ color: "var(--red)" }}>{error}</div>
+        <div style={{ fontSize: 13 }}>Run <code className="chip">ocx start</code> to start the proxy.</div>
       </div>
     );
   }
 
+  const online = health?.status === "ok";
+
   return (
-    <div>
-      <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
-        {card("Status", health?.status === "ok" ? "Online" : "Offline", health?.status === "ok" ? "#22c55e" : "#ef4444")}
-        {card("Version", health?.version ?? "—")}
-        {card("Uptime", health ? `${Math.floor(health.uptime)}s` : "—")}
-        {card("Providers", String(providers.length))}
+    <>
+      <div className="page-head"><h2>Dashboard</h2></div>
+      <p className="page-sub">Live status of the local opencodex proxy, its providers, and the models routed into Codex.</p>
+
+      <div className="stat-row">
+        <div className="stat">
+          <div className="label">Status</div>
+          <div className="value" style={{ display: "flex", alignItems: "center", gap: 9, color: online ? "var(--green)" : "var(--red)" }}>
+            <span className={`dot ${online ? "dot-green" : "dot-red"}`} />{online ? "Online" : "Offline"}
+          </div>
+        </div>
+        <div className="stat"><div className="label">Version</div><div className="value mono">{health?.version ?? "—"}</div></div>
+        <div className="stat"><div className="label">Uptime</div><div className="value mono">{health ? `${Math.floor(health.uptime)}s` : "—"}</div></div>
+        <div className="stat"><div className="label">Providers</div><div className="value">{providers.length}</div></div>
       </div>
 
-      <h3 style={{ fontSize: 16, marginBottom: 12 }}>Active Providers</h3>
+      <div className="h-section">Active providers <span className="count">{providers.length}</span></div>
       {providers.length === 0 ? (
-        <div style={{ color: "#888", fontSize: 13 }}>No providers configured. Run <code>ocx init</code>.</div>
+        <div className="empty">No providers configured. Run <code className="chip">ocx init</code>.</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-              <th style={{ textAlign: "left", padding: 8 }}>Name</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Adapter</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Base URL</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Model</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Auth</th>
-            </tr>
-          </thead>
-          <tbody>
-            {providers.map(p => (
-              <tr key={p.name} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                <td style={{ padding: 8, fontWeight: 600 }}>{p.name}</td>
-                <td style={{ padding: 8 }}><code>{p.adapter}</code></td>
-                <td style={{ padding: 8, fontSize: 12, color: "#666" }}>{p.baseUrl}</td>
-                <td style={{ padding: 8 }}>{p.defaultModel ?? "—"}</td>
-                <td style={{ padding: 8 }}>{p.hasApiKey ? "✅" : "❌"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>Name</th><th>Adapter</th><th>Base URL</th><th>Model</th><th>Auth</th></tr></thead>
+            <tbody>
+              {providers.map(p => (
+                <tr key={p.name}>
+                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                  <td><span className="chip">{p.adapter}</span></td>
+                  <td className="muted mono" style={{ fontSize: 12 }}>{p.baseUrl}</td>
+                  <td className="muted">{p.defaultModel ?? "—"}</td>
+                  <td>{p.hasApiKey
+                    ? <IconCheck style={{ width: 16, height: 16, color: "var(--green)" }} aria-label="key configured" />
+                    : <IconX style={{ width: 16, height: 16, color: "var(--faint)" }} aria-label="no key" />}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      <h3 style={{ fontSize: 16, marginTop: 32, marginBottom: 12 }}>
-        Available Models
-        {modelsLoading && <span style={{ fontSize: 12, color: "#888", fontWeight: 400, marginLeft: 8 }}>loading...</span>}
-      </h3>
+      <div className="h-section">
+        Available models <span className="count">{models.length}</span>
+        {modelsLoading && <span className="spin" style={{ marginLeft: 4 }} />}
+      </div>
       {models.length === 0 && !modelsLoading ? (
-        <div style={{ color: "#888", fontSize: 13 }}>No models found. Check provider API keys.</div>
+        <div className="empty">No models found. Check provider API keys.</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
           {models.map(m => (
-            <div key={`${m.provider}/${m.id}`} style={{ background: "#f9fafb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>{m.id}</div>
-              <div style={{ color: "#888", fontSize: 12 }}>{m.provider}{m.owned_by ? ` · ${m.owned_by}` : ""}</div>
+            <div key={`${m.provider}/${m.id}`} className="card" style={{ padding: "11px 14px" }}>
+              <div className="mono" style={{ fontWeight: 600, marginBottom: 3, fontSize: 13 }}>{m.id}</div>
+              <div className="muted" style={{ fontSize: 12 }}>{m.provider}{m.owned_by ? ` · ${m.owned_by}` : ""}</div>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }

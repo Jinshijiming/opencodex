@@ -1,11 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AddProviderModal from "../components/AddProviderModal";
+import { Notice } from "../ui";
+import { IconPlus, IconTrash, IconLock, IconExternal } from "../icons";
 
 interface Config {
   port: number;
   defaultProvider: string;
-  providers: Record<string, { adapter: string; baseUrl: string; apiKey?: string; defaultModel?: string }>;
+  providers: Record<string, { adapter: string; baseUrl: string; apiKey?: string; defaultModel?: string; authMode?: string }>;
 }
+
+interface OAuthStatus { loggedIn: boolean; email?: string; error?: string }
+
+// Friendly labels for the OAuth providers the proxy supports.
+const OAUTH_LABELS: Record<string, string> = {
+  xai: "xAI (Grok)",
+  anthropic: "Anthropic (Claude)",
+  kimi: "Kimi (Moonshot)",
+};
+const oauthLabel = (id: string) => OAUTH_LABELS[id] ?? id;
 
 export default function Providers({ apiBase }: { apiBase: string }) {
   const [config, setConfig] = useState<Config | null>(null);
@@ -13,8 +25,13 @@ export default function Providers({ apiBase }: { apiBase: string }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
-  const [oauth, setOauth] = useState<{ loggedIn: boolean; email?: string; error?: string }>({ loggedIn: false });
-  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthProviders, setOauthProviders] = useState<string[]>([]);
+  const [oauthStatus, setOauthStatus] = useState<Record<string, OAuthStatus>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [loginInfo, setLoginInfo] = useState<{ provider: string; url?: string; instructions?: string } | null>(null);
+  const aliveRef = useRef(true);
+
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; }; }, []);
 
   const fetchConfig = async () => {
     try {
@@ -27,7 +44,20 @@ export default function Providers({ apiBase }: { apiBase: string }) {
     }
   };
 
-  useEffect(() => { fetchConfig(); }, [apiBase]);
+  // Load the list of OAuth-capable providers, then each one's login status.
+  const fetchOauth = async () => {
+    try {
+      const provs: string[] = (await fetch(`${apiBase}/api/oauth/providers`).then(r => r.json())).providers ?? [];
+      setOauthProviders(provs);
+      const entries = await Promise.all(provs.map(async p => {
+        const s = await fetch(`${apiBase}/api/oauth/status?provider=${p}`).then(r => r.json()).catch(() => ({ loggedIn: false }));
+        return [p, s] as const;
+      }));
+      setOauthStatus(Object.fromEntries(entries));
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { fetchConfig(); fetchOauth(); }, [apiBase]);
 
   const saveConfig = async () => {
     try {
@@ -49,101 +79,150 @@ export default function Providers({ apiBase }: { apiBase: string }) {
     }
   };
 
-  const refreshOauth = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/oauth/status?provider=xai`);
-      setOauth(await res.json());
-    } catch { /* ignore */ }
-  };
-  useEffect(() => { refreshOauth(); }, [apiBase]);
-
-  const loginXai = async () => {
-    setOauthBusy(true);
+  const loginOAuth = async (provider: string) => {
+    setBusy(provider);
     setStatus("");
+    setLoginInfo(null);
     try {
       const res = await fetch(`${apiBase}/api/oauth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "xai" }),
+        body: JSON.stringify({ provider }),
       });
       const data = await res.json();
-      if (!res.ok || !data.url) { setStatus(data.error || "Login failed to start"); return; }
-      window.open(data.url, "_blank");
-      for (let i = 0; i < 100; i++) {
+      if (!res.ok) { setStatus(data.error || `${provider} login failed to start`); return; }
+      // The server opens the browser itself (popup-safe). Show the URL/device code as a fallback.
+      if (data.url || data.instructions) setLoginInfo({ provider, url: data.url, instructions: data.instructions });
+      // Poll until the loopback callback (or device flow) completes.
+      for (let i = 0; i < 150 && aliveRef.current; i++) {
         await new Promise(r => setTimeout(r, 2000));
-        const s = await fetch(`${apiBase}/api/oauth/status?provider=xai`).then(r => r.json()).catch(() => null);
-        if (s?.loggedIn) { setOauth(s); setStatus("✅ Logged in to xai. Run ocx sync to list its models."); fetchConfig(); break; }
-        if (s?.error) { setOauth(s); setStatus(`xai login error: ${s.error}`); break; }
+        const s: OAuthStatus | null = await fetch(`${apiBase}/api/oauth/status?provider=${provider}`).then(r => r.json()).catch(() => null);
+        if (!s) continue;
+        if (s.loggedIn) {
+          setOauthStatus(prev => ({ ...prev, [provider]: s }));
+          setStatus(`Logged in to ${oauthLabel(provider)}. Run ocx sync (or it applies live) to list its models.`);
+          setLoginInfo(null);
+          fetchConfig();
+          break;
+        }
+        if (s.error) { setOauthStatus(prev => ({ ...prev, [provider]: s })); setStatus(`${provider} login error: ${s.error}`); break; }
       }
     } catch {
-      setStatus("Login request failed");
+      setStatus(`${provider} login request failed`);
     } finally {
-      setOauthBusy(false);
+      if (aliveRef.current) setBusy(null);
     }
   };
 
-  const logoutXai = async () => {
-    await fetch(`${apiBase}/api/oauth/logout?provider=xai`, { method: "POST" }).catch(() => {});
-    setOauth({ loggedIn: false });
-    setStatus("Logged out of xai.");
+  const logoutOAuth = async (provider: string) => {
+    await fetch(`${apiBase}/api/oauth/logout?provider=${provider}`, { method: "POST" }).catch(() => {});
+    setOauthStatus(prev => ({ ...prev, [provider]: { loggedIn: false } }));
+    setStatus(`Logged out of ${oauthLabel(provider)}.`);
     fetchConfig();
   };
 
-  if (!config) return <div>Loading...</div>;
+  const removeProvider = async (name: string) => {
+    if (!window.confirm(`Remove provider "${name}"? Its models disappear from Codex's picker.`)) return;
+    const res = await fetch(`${apiBase}/api/providers?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (res.ok) { setStatus(`Removed "${name}".`); fetchConfig(); fetchOauth(); }
+    else setStatus(`Failed to remove "${name}".`);
+  };
+
+  if (!config) return <div className="muted">Loading…</div>;
+
+  const statusOk = status.includes("Saved") || status.includes("Logged in") || status.includes("Removed") || status.includes("Added") || status.includes("Logged out");
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h3 style={{ fontSize: 16, margin: 0 }}>Provider Configuration</h3>
-        <div style={{ display: "flex", gap: 8 }}>
+    <>
+      <div className="page-head">
+        <h2>Providers</h2>
+        <div className="row">
           {editing ? (
             <>
-              <button onClick={saveConfig} style={btnStyle("#3b82f6")}>Save</button>
-              <button onClick={() => { setEditing(false); setDraft(JSON.stringify(config, null, 2)); }} style={btnStyle("#888")}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveConfig}>Save</button>
+              <button className="btn btn-ghost" onClick={() => { setEditing(false); setDraft(JSON.stringify(config, null, 2)); }}>Cancel</button>
             </>
           ) : (
             <>
-              <button onClick={() => setAdding(true)} style={btnStyle("#3b82f6")}>Add Provider</button>
-              <button onClick={() => setEditing(true)} style={btnStyle("#9ca3af")}>Edit JSON</button>
+              <button className="btn btn-primary" onClick={() => setAdding(true)}><IconPlus />Add Provider</button>
+              <button className="btn btn-ghost" onClick={() => setEditing(true)}>Edit JSON</button>
             </>
           )}
         </div>
       </div>
-      {status && <div style={{ fontSize: 13, color: status.includes("Saved") || status.includes("✅") ? "#22c55e" : "#ef4444", marginBottom: 12 }}>{status}</div>}
-      <div style={{ background: "#f0f9ff", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>OAuth Login</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 13 }}>
-            xAI (Grok): {oauth.loggedIn
-              ? <strong style={{ color: "#22c55e" }}>logged in{oauth.email ? ` (${oauth.email})` : ""}</strong>
-              : <span style={{ color: "#888" }}>not logged in</span>}
-          </span>
-          {oauth.loggedIn ? (
-            <button onClick={logoutXai} style={btnStyle("#888")}>Logout</button>
-          ) : (
-            <button onClick={loginXai} disabled={oauthBusy} style={btnStyle(oauthBusy ? "#9ca3af" : "#3b82f6")}>
-              {oauthBusy ? "Waiting for browser…" : "Login with xAI"}
-            </button>
-          )}
+      <p className="page-sub">Configure the upstream providers opencodex routes into Codex. Log in with an account, add a provider, or edit the raw config.</p>
+
+      {status && <Notice tone={statusOk ? "ok" : "err"}>{status}</Notice>}
+
+      {/* OAuth Login — every OAuth-capable provider, with its live login status. */}
+      <div className="panel panel-accent" style={{ marginBottom: 18 }}>
+        <div className="row" style={{ marginBottom: 14 }}>
+          <IconLock style={{ width: 16, height: 16, color: "var(--accent)" }} />
+          <span style={{ fontWeight: 600 }}>Account login</span>
+        </div>
+        <div className="stack" style={{ gap: 12 }}>
+          {oauthProviders.length === 0 && <span className="muted" style={{ fontSize: 13 }}>No OAuth providers available.</span>}
+          {oauthProviders.map(p => {
+            const st = oauthStatus[p] ?? { loggedIn: false };
+            const isBusy = busy === p;
+            return (
+              <div key={p} className="row" style={{ flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, minWidth: 170, display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{oauthLabel(p)}</span>
+                  {st.loggedIn ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--green)" }}>
+                      <span className="dot dot-green" />logged in{st.email ? ` (${st.email})` : ""}
+                    </span>
+                  ) : (
+                    <span className="muted">not logged in</span>
+                  )}
+                </span>
+                {st.loggedIn ? (
+                  <button className="btn btn-ghost btn-sm" onClick={() => logoutOAuth(p)}>Logout</button>
+                ) : (
+                  <button className="btn btn-primary btn-sm" onClick={() => loginOAuth(p)} disabled={isBusy}>
+                    {isBusy ? <><span className="spin" />Waiting for browser…</> : <><IconLock />Login with {oauthLabel(p)}</>}
+                  </button>
+                )}
+                {loginInfo?.provider === p && (loginInfo.url || loginInfo.instructions) && (
+                  <span className="muted" style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    {loginInfo.url && <a href={loginInfo.url} target="_blank" rel="noreferrer" className="link-btn" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconExternal />Didn't open? Click here</a>}
+                    {loginInfo.instructions && <span>{loginInfo.instructions}</span>}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
+
       {editing ? (
         <textarea
+          className="input"
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          style={{ width: "100%", height: 400, fontFamily: "monospace", fontSize: 13, padding: 12, borderRadius: 8, border: "1px solid #e5e7eb", resize: "vertical" }}
+          style={{ height: 400 }}
         />
       ) : (
-        <div>
-          <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>Port: {config.port} · Default: {config.defaultProvider}</div>
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>
+            Port: <code className="chip">{config.port}</code> · Default: <code className="chip">{config.defaultProvider}</code>
+          </div>
           {Object.entries(config.providers).map(([name, prov]) => (
-            <div key={name} style={{ background: "#f9fafb", borderRadius: 8, padding: 16, marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{name}</div>
-              <div style={{ fontSize: 13, color: "#666" }}>
-                Adapter: <code>{prov.adapter}</code> · URL: {prov.baseUrl}
-                {prov.defaultModel && <> · Model: {prov.defaultModel}</>}
-                {prov.apiKey && <> · Key: {prov.apiKey}</>}
+            <div key={name} className="card prov-card">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                  <span style={{ fontWeight: 600 }}>{name}</span>
+                  {prov.authMode === "oauth" && <span className="badge badge-accent">oauth</span>}
+                  {prov.authMode === "forward" && <span className="badge badge-amber">passthrough</span>}
+                </div>
+                <div className="muted" style={{ fontSize: 13 }}>
+                  <code className="chip">{prov.adapter}</code> · {prov.baseUrl}
+                  {prov.defaultModel && <> · {prov.defaultModel}</>}
+                  {prov.apiKey && <> · {prov.apiKey}</>}
+                </div>
               </div>
+              <button className="btn btn-danger btn-sm" onClick={() => removeProvider(name)} aria-label={`Remove ${name}`} style={{ flexShrink: 0 }}><IconTrash />Remove</button>
             </div>
           ))}
         </div>
@@ -153,14 +232,9 @@ export default function Providers({ apiBase }: { apiBase: string }) {
           apiBase={apiBase}
           existingNames={Object.keys(config.providers)}
           onClose={() => setAdding(false)}
-          onAdded={(name) => { setAdding(false); setStatus(`Added "${name}". Live now — run ocx sync (or restart) to list its models in Codex's picker.`); fetchConfig(); }}
+          onAdded={(name) => { setAdding(false); setStatus(`Added "${name}". Live now — run ocx sync (or restart) to list its models in Codex's picker.`); fetchConfig(); fetchOauth(); }}
         />
       )}
-    </div>
+    </>
   );
 }
-
-const btnStyle = (bg: string) => ({
-  padding: "6px 14px", borderRadius: 6, border: "none", background: bg,
-  color: "#fff", fontSize: 13, cursor: "pointer" as const,
-});
