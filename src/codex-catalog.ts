@@ -79,6 +79,10 @@ export function normalizeRoutedCatalogEntry(entry: RawEntry): RawEntry {
   delete entry.service_tier;
   delete entry.service_tiers;
   delete entry.default_service_tier;
+  // Routed providers use opencodex sidecars and client-executed tool discovery, not OpenAI's
+  // native hosted text+image search. Keep hosted search text-only and make tool_search explicit.
+  entry.web_search_tool_type = "text";
+  entry.supports_search_tool = true;
   return entry;
 }
 
@@ -156,6 +160,7 @@ function deriveEntry(template: RawEntry | null, slug: string, desc: string, prio
     supported_reasoning_levels: ROUTED_REASONING_LEVELS.map(l => ({ ...l })),
     shell_type: "shell_command", visibility: "list", supported_in_api: true,
     priority, base_instructions: "You are a helpful coding assistant.",
+    ...(slug.includes("/") ? { web_search_tool_type: "text", supports_search_tool: true } : {}),
   });
 }
 

@@ -16,6 +16,8 @@ function nativeTemplate(): Record<string, unknown> {
     multi_agent_version: "v2",
     use_responses_lite: true,
     supports_websockets: true,
+    web_search_tool_type: "text_and_image",
+    supports_search_tool: true,
     additional_speed_tiers: [{ id: "priority" }],
     service_tier: "fast",
     service_tiers: [{ id: "fast" }],
@@ -44,6 +46,8 @@ describe("Codex catalog routed normalization", () => {
     expect(entry).not.toHaveProperty("service_tier");
     expect(entry).not.toHaveProperty("service_tiers");
     expect(entry).not.toHaveProperty("default_service_tier");
+    expect(entry.web_search_tool_type).toBe("text");
+    expect(entry.supports_search_tool).toBe(true);
   });
 
   test("buildCatalogEntries strips routed entries cloned from native templates", () => {
@@ -62,6 +66,8 @@ describe("Codex catalog routed normalization", () => {
     expect(routed).not.toHaveProperty("service_tier");
     expect(routed).not.toHaveProperty("service_tiers");
     expect(routed).not.toHaveProperty("default_service_tier");
+    expect(routed?.web_search_tool_type).toBe("text");
+    expect(routed?.supports_search_tool).toBe(true);
     expect(routed?.base_instructions).not.toBe(nativeTemplate().base_instructions);
     expect(routed?.base_instructions).toContain("claude-sonnet-4-6");
     expect(routed?.default_reasoning_level).toBe("medium");
@@ -77,7 +83,19 @@ describe("Codex catalog routed normalization", () => {
     expect(native?.multi_agent_version).toBe("v2");
     expect(native?.use_responses_lite).toBe(true);
     expect(native?.supports_websockets).toBe(true);
+    expect(native?.web_search_tool_type).toBe("text_and_image");
+    expect(native?.supports_search_tool).toBe(true);
     expect(native?.service_tier).toBe("priority");
     expect(native?.service_tiers).toEqual([{ id: "priority" }]);
+  });
+
+  test("fallback routed entries still receive explicit search metadata", () => {
+    const entries = buildCatalogEntries(null, [], [
+      { provider: "local", id: "qwen3-coder" },
+    ]);
+    const routed = entries.find(e => e.slug === "local/qwen3-coder");
+
+    expect(routed?.web_search_tool_type).toBe("text");
+    expect(routed?.supports_search_tool).toBe(true);
   });
 });
