@@ -239,7 +239,18 @@ function addRequestLog(entry: typeof requestLog[number]) {
  * Drop encoding + hop-by-hop headers; relay everything else (content-type, etc.) verbatim.
  */
 export function sanitizePassthroughHeaders(upstream: Headers): Headers {
-  const DROP = new Set(["content-encoding", "content-length", "transfer-encoding", "connection", "keep-alive"]);
+  const DROP = new Set([
+    "content-encoding",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "upgrade",
+  ]);
   const out = new Headers();
   upstream.forEach((value, key) => {
     if (!DROP.has(key.toLowerCase())) out.set(key, value);

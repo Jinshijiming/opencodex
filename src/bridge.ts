@@ -1,4 +1,5 @@
 import type { AdapterEvent, OcxUsage } from "./types";
+import { classifyError, type OcxErrorPayload } from "./errors";
 
 function uuid(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -22,6 +23,10 @@ function responsesUsage(usage: OcxUsage | undefined): Record<string, unknown> {
     out.output_tokens_details = { reasoning_tokens: usage.reasoningOutputTokens };
   }
   return out;
+}
+
+function responseError(status: number, type: string, message: string): OcxErrorPayload {
+  return classifyError(status, type, message);
 }
 
 interface OutputItem {
@@ -281,7 +286,8 @@ export function bridgeToResponsesSSE(
               emit("response.failed", {
                 response: {
                   ...responseSnapshot("failed", finishedItems),
-                  last_error: { type: "upstream_error", message: event.message },
+                  error: responseError(502, "upstream_error", event.message),
+                  last_error: responseError(502, "upstream_error", event.message),
                 },
               });
               break;
@@ -292,7 +298,8 @@ export function bridgeToResponsesSSE(
         emit("response.failed", {
           response: {
             ...responseSnapshot("failed", finishedItems),
-            last_error: { type: "proxy_error", message: err instanceof Error ? err.message : String(err) },
+            error: responseError(500, "proxy_error", err instanceof Error ? err.message : String(err)),
+            last_error: responseError(500, "proxy_error", err instanceof Error ? err.message : String(err)),
           },
         });
       }
@@ -351,7 +358,7 @@ export function buildResponseJSON(
 }
 
 export function formatErrorResponse(status: number, type: string, message: string): Response {
-  return new Response(JSON.stringify({ error: { message, type, code: null } }), {
+  return new Response(JSON.stringify({ error: classifyError(status, type, message) }), {
     status, headers: { "Content-Type": "application/json" },
   });
 }
