@@ -132,6 +132,10 @@ function deriveEntry(template: RawEntry | null, slug: string, desc: string, prio
       );
       e.supported_reasoning_levels = ROUTED_REASONING_LEVELS.map(l => byEffort.get(l.effort) ?? { ...l });
       e.default_reasoning_level = "medium";
+      delete e.additional_speed_tiers;
+      delete e.service_tier;
+      delete e.service_tiers;
+      delete e.default_service_tier;
     }
     return normalizeServiceTiers(e);
   }

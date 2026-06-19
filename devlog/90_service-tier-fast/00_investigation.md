@@ -12,6 +12,7 @@
 - opencodex was rewriting catalog service tier ids from `priority` to `fast`, which made Codex's support check fail because it now checks for `priority`.
 - The local config had `service_tier = "fast"` but no `fast_mode = true`, so current Codex would also drop the tier through the fast-mode feature gate.
 - The TUI status-line fast badge also requires `has_chatgpt_account`. App-server account state derives that from the active model provider's `requires_openai_auth`; opencodex must set it to `true` so Codex treats the proxy like the built-in OpenAI provider for ChatGPT-auth features.
+- Routed models were cloned from a native GPT catalog template, so they accidentally inherited `additional_speed_tiers`, `service_tiers`, and default service-tier fields. That exposed `/fast` for non-OpenAI providers even though the priority tier is only valid for OpenAI native passthrough.
 
 ## Decision
 
@@ -22,6 +23,7 @@ Use Codex's current split semantics:
 - legacy catalog compatibility: normalize `fast` catalog ids back to `priority`
 - opencodex injection must ensure `[features].fast_mode = true`
 - opencodex provider injection must set `requires_openai_auth = true`
+- native OpenAI passthrough models keep fast tier metadata; routed provider models must strip all service-tier/speed-tier metadata
 
 Do not rewrite outbound passthrough request bodies from `priority` to `fast`; `priority` is the current OpenAI request value for priority processing.
 
@@ -31,3 +33,4 @@ Do not rewrite outbound passthrough request bodies from `priority` to `fast`; `p
 - Existing legacy entries with `service_tiers[].id = "fast"` should be upgraded to `priority`.
 - `service_tier = "fast"` in Codex config should remain unchanged, with `[features].fast_mode = true` present.
 - `[model_providers.opencodex]` should include `requires_openai_auth = true` so Codex App/TUI can expose ChatGPT-account-gated fast UI.
+- `opencode-go/*`, `xai/*`, `anthropic/*`, and all other routed models should have no `service_tiers`, no `additional_speed_tiers`, and no default service tier.
