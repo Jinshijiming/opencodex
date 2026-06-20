@@ -124,8 +124,10 @@ jobs:
         run: |
           bun run src/cli.ts service uninstall
           Start-Sleep -Seconds 1
-          $task = schtasks /query /tn opencodex-proxy 2>&1
-          if ($task -match "opencodex-proxy") {
+          $found = $true
+          try { $task = schtasks /query /tn opencodex-proxy 2>&1 } catch { $found = $false }
+          if ($LASTEXITCODE -ne 0) { $found = $false }
+          if ($found -and ($task -match "opencodex-proxy")) {
             Write-Host "❌ Task still exists after uninstall"
             exit 1
           }
