@@ -107,9 +107,13 @@ export function buildWindowsServiceScript(): string {
     windowsBatchSet("OCX_SERVICE", "1"),
     windowsBatchSet("PATH", path),
     windowsBatchSet("CODEX_HOME", process.env.CODEX_HOME?.trim()),
+    ":loop",
     `"${bun}" "${cli}" start`,
-    "set \"OCX_EXIT=%ERRORLEVEL%\"",
-    "endlocal & exit /b %OCX_EXIT%",
+    "if %ERRORLEVEL% NEQ 0 (",
+    "  timeout /t 5 /nobreak >nul",
+    "  goto loop",
+    ")",
+    "endlocal",
   ].filter((line): line is string => Boolean(line));
   return `${lines.join("\r\n")}\r\n`;
 }

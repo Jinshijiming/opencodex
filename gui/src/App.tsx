@@ -46,9 +46,9 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <img src="/logo.png" alt="" />
+          <span className="brand-logo" role="img" aria-label="opencodex logo" />
           <span className="name">opencodex</span>
-          <span className="ver">v0.0.1</span>
+          <span className="ver">v{__APP_VERSION__}</span>
         </div>
         <nav>
           {NAV.map(({ id, label, Icon }) => (

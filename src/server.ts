@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { createAnthropicAdapter } from "./adapters/anthropic";
 import { createAzureAdapter } from "./adapters/azure";
@@ -32,7 +32,15 @@ import { enrichProviderFromCatalog, listKeyLoginProviders } from "./oauth/key-pr
 import { deriveProviderPresets } from "./providers/derive";
 import type { OcxConfig, OcxProviderConfig } from "./types";
 
-const VERSION = "0.0.1";
+// Single source of truth = package.json (../ from src/), so /healthz + the GUI badge match the
+// installed npm version instead of a stale hardcode.
+const VERSION = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version as string;
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html", ".js": "application/javascript", ".css": "text/css",
